@@ -2,7 +2,6 @@ import { lazy, Suspense, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import { SampleSource } from './domain/GalaxySource'
 import { Overlay } from './overlay/Overlay'
-import { ChromeLayer } from './ui/ChromeLayer'
 import { TopBar } from './ui/TopBar'
 import { BottomBar } from './ui/BottomBar'
 import { SystemInfoPanel } from './ui/SystemInfoPanel'
@@ -63,11 +62,9 @@ export default function App() {
         <GalaxyCanvas source={source} />
       </Suspense>
       <Overlay systems={systems} />
-      <ChromeLayer>
-        <TopBar />
-        <BottomBar />
-        <SystemInfoPanel systems={systems} />
-      </ChromeLayer>
+      <TopBar />
+      <BottomBar />
+      <SystemInfoPanel systems={systems} />
     </div>
   )
 }
