@@ -3,13 +3,20 @@ import type { CSSProperties } from 'react'
 import type { StarSystem } from '../domain/types'
 import { ACCENT_RGB, useMapStore } from '../store/mapStore'
 import { lodRef, smooth } from '../scene/lod'
-import { cameraDistance, project } from './viewRef'
+import { fieldRef } from '../scene/fieldRef'
+import { cameraDistance, project, viewRef } from './viewRef'
 
 const MONO = "'IBM Plex Mono', monospace"
 
 // Declutter thresholds: two label anchors closer than this (px) collide.
 const LABEL_GAP_X = 92
 const LABEL_GAP_Y = 16
+
+// Field labels: a small reusable pool, never one-per-system. Each frame we label
+// the nearest + brightest few field systems plus the hovered one; the rest stay
+// blank. FIELD_SCAN is how many nearest candidates we project before placing.
+const N_FIELD_LABELS = 16
+const FIELD_SCAN = 40
 
 const labelStyle: CSSProperties = {
   position: 'absolute',
@@ -56,6 +63,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
   const mode = useMapStore((s) => s.mode)
 
   const labelRefs = useRef<(HTMLDivElement | null)[]>([])
+  const fieldLabelRefs = useRef<(HTMLDivElement | null)[]>([])
   const reticleRef = useRef<HTMLDivElement | null>(null)
   const tagRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -97,6 +105,93 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         c.el.style.left = `${c.x}px`
         c.el.style.top = `${c.y}px`
         c.el.style.opacity = (clamp((D + 1.7 - c.depth) / 2.4, 0.12, 0.72) * surveyFade).toFixed(3)
+      }
+
+      // Field labels: only when zoomed in (they fade out with the survey), and
+      // only for the nearest + brightest handful, plus the hovered system. The
+      // heavy sweep over all field positions is skipped entirely at galaxy scale.
+      const flabels = fieldLabelRefs.current
+      const fpos = fieldRef.positions
+      const fsys = fieldRef.systems
+      const cam = viewRef.camera
+      let fUsed = 0
+      if (fpos && cam && surveyFade > 0.05) {
+        const cpx = cam.position.x
+        const cpy = cam.position.y
+        const cpz = cam.position.z
+        // Keep the K nearest-by-score (distance discounted by brightness, so a
+        // bright giant gets labelled from a little farther than a dim red dwarf).
+        const idxBuf: number[] = []
+        const scBuf: number[] = []
+        let worst = -1
+        let worstScore = -Infinity
+        const n = fsys.length
+        for (let i = 0; i < n; i++) {
+          const dx = fpos[i * 3] - cpx
+          const dy = fpos[i * 3 + 1] - cpy
+          const dz = fpos[i * 3 + 2] - cpz
+          const score = (dx * dx + dy * dy + dz * dz) / (1 + fsys[i].renderSize * 20)
+          if (idxBuf.length < FIELD_SCAN) {
+            idxBuf.push(i)
+            scBuf.push(score)
+            if (idxBuf.length === FIELD_SCAN) {
+              worstScore = -Infinity
+              for (let j = 0; j < FIELD_SCAN; j++) if (scBuf[j] > worstScore) { worstScore = scBuf[j]; worst = j }
+            }
+          } else if (score < worstScore) {
+            idxBuf[worst] = i
+            scBuf[worst] = score
+            worstScore = -Infinity
+            for (let j = 0; j < FIELD_SCAN; j++) if (scBuf[j] > worstScore) { worstScore = scBuf[j]; worst = j }
+          }
+        }
+        const hoveredId = useMapStore.getState().hovered?.id ?? null
+        const fcand: { i: number; x: number; y: number; depth: number }[] = []
+        for (let j = 0; j < idxBuf.length; j++) {
+          const i = idxBuf[j]
+          const p = project([fpos[i * 3], fpos[i * 3 + 1], fpos[i * 3 + 2]])
+          if (!p || !p.inFront || p.depth <= 0.45) continue
+          fcand.push({ i, x: p.x, y: p.y, depth: p.depth })
+        }
+        fcand.sort((a, b) => a.depth - b.depth)
+        for (const fc of fcand) {
+          if (fUsed >= flabels.length - 1) break // reserve one slot for the hovered label
+          const collides = placed.some(
+            (q) => Math.abs(fc.x - q.x) < LABEL_GAP_X && Math.abs(fc.y - q.y) < LABEL_GAP_Y,
+          )
+          if (collides) continue
+          const el = flabels[fUsed]
+          if (!el) continue
+          placed.push({ x: fc.x, y: fc.y })
+          el.textContent = fsys[fc.i].name
+          el.style.display = 'block'
+          el.style.left = `${fc.x}px`
+          el.style.top = `${fc.y}px`
+          el.style.opacity = (clamp((D + 1.7 - fc.depth) / 2.4, 0.1, 0.6) * surveyFade).toFixed(3)
+          fUsed++
+        }
+        // Always label the hovered field system, even if it wasn't near/bright.
+        if (hoveredId && fUsed < flabels.length) {
+          const hi = fsys.findIndex((s) => s.id === hoveredId)
+          if (hi >= 0) {
+            const p = project([fpos[hi * 3], fpos[hi * 3 + 1], fpos[hi * 3 + 2]])
+            if (p && p.inFront && p.depth > 0.45) {
+              const el = flabels[fUsed]
+              if (el) {
+                el.textContent = fsys[hi].name
+                el.style.display = 'block'
+                el.style.left = `${p.x}px`
+                el.style.top = `${p.y}px`
+                el.style.opacity = (0.85 * surveyFade).toFixed(3)
+                fUsed++
+              }
+            }
+          }
+        }
+      }
+      for (let k = fUsed; k < flabels.length; k++) {
+        const el = flabels[k]
+        if (el) el.style.display = 'none'
       }
 
       // Selected: reticle + tag + guide line.
@@ -208,6 +303,17 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         >
           {system.name}
         </div>
+      ))}
+
+      {/* Reusable pool for field labels — text/position written each frame. */}
+      {Array.from({ length: N_FIELD_LABELS }).map((_, i) => (
+        <div
+          key={`field-label-${i}`}
+          ref={(el) => {
+            fieldLabelRefs.current[i] = el
+          }}
+          style={labelStyle}
+        />
       ))}
 
       <div ref={reticleRef} style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%,-50%)', width: 96, height: 96, display: 'none' }}>
