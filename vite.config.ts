@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Honour a harness-assigned port (autoPort) while defaulting to 5173 locally.
+  server: { port: Number(process.env.PORT) || 5173 },
   // @react-three/postprocessing pulls the core `postprocessing` lib, which can
   // resolve a second copy of three; dedupe so the whole app shares one instance.
   resolve: { dedupe: ['three', '@react-three/fiber', 'react', 'react-dom'] },

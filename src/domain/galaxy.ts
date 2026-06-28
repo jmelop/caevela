@@ -50,7 +50,7 @@ function diskColor(t: number): [number, number, number] {
 }
 
 /** Rotate (x,z) by the bar angle. */
-function barRot(x: number, z: number): [number, number] {
+export function barRot(x: number, z: number): [number, number] {
   const c = Math.cos(BAR_ANGLE)
   const s = Math.sin(BAR_ANGLE)
   return [x * c - z * s, x * s + z * c]
@@ -61,7 +61,7 @@ function barRot(x: number, z: number): [number, number] {
  * sit between them, and a rare few stars scatter inter-arm. `spread` widens the
  * angular jitter for the looser arms.
  */
-function pickArm(rng: () => number): { base: number; spread: number } {
+export function pickArm(rng: () => number): { base: number; spread: number } {
   const roll = rng()
   if (roll < 0.72) return { base: BAR_ANGLE + (rng() < 0.5 ? 0 : Math.PI), spread: 1 }
   if (roll < 0.95) {
@@ -71,7 +71,7 @@ function pickArm(rng: () => number): { base: number; spread: number } {
 }
 
 /** Logarithmic-arm angle at radius r for a given arm base + jitter. */
-function armAngle(base: number, r: number, jitter: number): number {
+export function armAngle(base: number, r: number, jitter: number): number {
   return base + SPIRAL_TURNS * (r / GALAXY_RADIUS) * Math.PI * 2 + jitter
 }
 

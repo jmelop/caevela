@@ -11,13 +11,13 @@ import { useMapStore } from '../store/mapStore'
  * InstancedMesh path matters when GalaxySource swaps to a massive real catalogue.
  */
 export function SystemNodes({ systems }: { systems: StarSystem[] }) {
-  const selectedIndex = useMapStore((s) => s.selectedIndex)
+  const selected = useMapStore((s) => s.selected)
   const panelOpen = useMapStore((s) => s.panelOpen)
 
   return (
     <group>
       {systems.map((system, index) => {
-        if (panelOpen && index === selectedIndex) return null
+        if (panelOpen && system.id === selected.id) return null
         return (
           <group key={system.id} position={system.position} userData={{ index }}>
             <mesh>

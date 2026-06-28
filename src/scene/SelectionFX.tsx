@@ -3,7 +3,6 @@ import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { AdditiveBlending, DoubleSide } from 'three'
 import type { Mesh, MeshBasicMaterial } from 'three'
-import type { StarSystem } from '../domain/types'
 import { ACCENT_HEX, useMapStore } from '../store/mapStore'
 import { softCircleTexture } from './radialTexture'
 
@@ -13,8 +12,8 @@ import { softCircleTexture } from './radialTexture'
  * real glow, a steady selection ring, two expanding/fading pulse rings, and a
  * hot white core. The DOM reticle/tag/guide line sit on top of this.
  */
-export function SelectionFX({ systems }: { systems: StarSystem[] }) {
-  const selectedIndex = useMapStore((s) => s.selectedIndex)
+export function SelectionFX() {
+  const selected = useMapStore((s) => s.selected)
   const panelOpen = useMapStore((s) => s.panelOpen)
   const accent = useMapStore((s) => s.accent)
   const accentHex = ACCENT_HEX[accent]
@@ -35,8 +34,7 @@ export function SelectionFX({ systems }: { systems: StarSystem[] }) {
   })
 
   if (!panelOpen) return null
-  const sys = systems[selectedIndex]
-  if (!sys) return null
+  const sys = selected
 
   return (
     <group position={sys.position}>

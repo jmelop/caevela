@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode } from 'react'
-import type { StarSystem } from '../domain/types'
 import { useMapStore } from '../store/mapStore'
 import {
   CloseIcon,
@@ -92,15 +91,14 @@ const container: CSSProperties = {
   boxShadow: '0 18px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)',
 }
 
-export function SystemInfoPanel({ systems }: { systems: StarSystem[] }) {
-  const selectedIndex = useMapStore((s) => s.selectedIndex)
+export function SystemInfoPanel() {
+  const selected = useMapStore((s) => s.selected)
   const panelOpen = useMapStore((s) => s.panelOpen)
   const mode = useMapStore((s) => s.mode)
   const closePanel = useMapStore((s) => s.closePanel)
 
   if (!panelOpen) return null
-  const sys = systems[selectedIndex]
-  if (!sys) return null
+  const sys = selected
 
   const visited = sys.status === 'Visited'
   const st = statusStyle(visited)
