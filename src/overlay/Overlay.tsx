@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import type { StarSystem } from '../domain/types'
 import { ACCENT_RGB, useMapStore } from '../store/mapStore'
+import { lodRef, smooth } from '../scene/lod'
 import { cameraDistance, project } from './viewRef'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -58,6 +59,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
   const reticleRef = useRef<HTMLDivElement | null>(null)
   const tagRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const youHereRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let raf = 0
@@ -65,6 +67,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
       const { selectedIndex: sel, panelOpen, accent } = useMapStore.getState()
       const rgb = ACCENT_RGB[accent]
       const D = cameraDistance()
+      const surveyFade = 1 - lodRef.t // survey overlay dims out at galaxy scale
 
       // Labels. Project all candidates, then declutter: nearest wins, and any
       // label whose anchor overlaps an already-placed one is hidden.
@@ -93,7 +96,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         c.el.style.display = 'block'
         c.el.style.left = `${c.x}px`
         c.el.style.top = `${c.y}px`
-        c.el.style.opacity = clamp((D + 1.7 - c.depth) / 2.4, 0.12, 0.72).toFixed(2)
+        c.el.style.opacity = (clamp((D + 1.7 - c.depth) / 2.4, 0.12, 0.72) * surveyFade).toFixed(3)
       }
 
       // Selected: reticle + tag + guide line.
@@ -106,6 +109,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         if (showSel && ps) {
           reticle.style.left = `${ps.x}px`
           reticle.style.top = `${ps.y}px`
+          reticle.style.opacity = surveyFade.toFixed(3)
         }
       }
       if (tag) {
@@ -113,6 +117,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         if (showSel && ps) {
           tag.style.left = `${ps.x}px`
           tag.style.top = `${ps.y}px`
+          tag.style.opacity = surveyFade.toFixed(3)
         }
       }
 
@@ -131,7 +136,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
           ctx.clearRect(0, 0, vw, vh)
           const panel = document.getElementById('sys-panel')
-          if (showSel && ps && panel) {
+          if (showSel && ps && panel && surveyFade > 0.02) {
             const r = panel.getBoundingClientRect()
             const ex = r.left
             const ey = r.top + 52
@@ -141,8 +146,8 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
             const sx = ps.x + (dx / len) * 46
             const sy = ps.y + (dy / len) * 46
             const grad = ctx.createLinearGradient(sx, sy, ex, ey)
-            grad.addColorStop(0, `rgba(${rgb},0.12)`)
-            grad.addColorStop(1, `rgba(${rgb},0.55)`)
+            grad.addColorStop(0, `rgba(${rgb},${0.12 * surveyFade})`)
+            grad.addColorStop(1, `rgba(${rgb},${0.55 * surveyFade})`)
             ctx.strokeStyle = grad
             ctx.lineWidth = 1
             ctx.beginPath()
@@ -151,14 +156,29 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
             ctx.stroke()
             ctx.beginPath()
             ctx.arc(ex, ey, 3, 0, Math.PI * 2)
-            ctx.fillStyle = `rgba(${rgb},0.9)`
+            ctx.fillStyle = `rgba(${rgb},${0.9 * surveyFade})`
             ctx.fill()
             ctx.beginPath()
             ctx.arc(ex, ey, 6, 0, Math.PI * 2)
-            ctx.strokeStyle = `rgba(${rgb},0.35)`
+            ctx.strokeStyle = `rgba(${rgb},${0.35 * surveyFade})`
             ctx.lineWidth = 1
             ctx.stroke()
           }
+        }
+      }
+
+      // "You are here" marker at the survey origin — fades in at galaxy scale.
+      const yhere = youHereRef.current
+      if (yhere) {
+        const yt = smooth(lodRef.t)
+        const po = project([0, 0, 0])
+        if (yt > 0.02 && po && po.inFront) {
+          yhere.style.display = 'block'
+          yhere.style.left = `${po.x}px`
+          yhere.style.top = `${po.y}px`
+          yhere.style.opacity = yt.toFixed(3)
+        } else {
+          yhere.style.display = 'none'
         }
       }
 
@@ -238,6 +258,47 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
           }}
         >
           {selTag}
+        </div>
+      </div>
+
+      <div
+        ref={youHereRef}
+        style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%,-50%)', textAlign: 'center', display: 'none' }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            border: '1.5px solid var(--accent)',
+            margin: '0 auto',
+            boxShadow: '0 0 12px color-mix(in srgb, var(--accent) 60%, transparent)',
+          }}
+        />
+        <div
+          style={{
+            marginTop: 8,
+            fontFamily: MONO,
+            fontSize: 10,
+            letterSpacing: '0.28em',
+            color: 'var(--accent)',
+            whiteSpace: 'nowrap',
+            textShadow: '0 0 10px rgba(0,0,0,0.9)',
+          }}
+        >
+          YOU ARE HERE
+        </div>
+        <div
+          style={{
+            marginTop: 3,
+            fontFamily: MONO,
+            fontSize: 8,
+            letterSpacing: '0.3em',
+            color: 'rgba(180,195,215,0.6)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          LOCAL SURVEY
         </div>
       </div>
     </div>

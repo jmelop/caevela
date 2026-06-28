@@ -4,6 +4,7 @@ import { Vector3 } from 'three'
 import type { StarSystem } from '../domain/types'
 import { useMapStore } from '../store/mapStore'
 import { CAMERA_DEFAULTS, orbitPosition } from './cameraRig'
+import { lodRef } from './lod'
 
 const HIT_RADIUS_PX = 24
 const DRAG_THRESHOLD_PX = 3
@@ -137,7 +138,9 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
     const idle =
       !drag.current && performance.now() - lastInteract.current > IDLE_MS
     controls.autoRotate = idle
-    controls.autoRotateSpeed = AUTO_ROTATE_SPEED
+    // Slow the drift right down at galaxy scale (a survey-rate spin is dizzying
+    // when the whole galaxy is in frame).
+    controls.autoRotateSpeed = AUTO_ROTATE_SPEED * (1 - 0.85 * lodRef.t)
   })
 
   return null

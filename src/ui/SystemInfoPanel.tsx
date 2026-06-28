@@ -82,6 +82,7 @@ const container: CSSProperties = {
   minWidth: 344,
   maxWidth: 404,
   zIndex: 11,
+  pointerEvents: 'auto',
   borderRadius: 9,
   overflow: 'hidden',
   background: 'linear-gradient(165deg, rgba(14,19,30,0.66), rgba(8,11,18,0.76))',
