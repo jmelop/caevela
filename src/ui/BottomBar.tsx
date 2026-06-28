@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { useMapStore } from '../store/mapStore'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -49,6 +50,7 @@ function Keycap({ children, minWidth }: { children: ReactNode; minWidth: number 
 }
 
 export function BottomBar() {
+  const mode = useMapStore((s) => s.mode)
   return (
     <div style={wrap}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto' }}>
@@ -66,8 +68,9 @@ export function BottomBar() {
           textShadow: '0 1px 4px rgba(0,0,0,0.9)',
         }}
       >
-        DRAG TO ROTATE&nbsp;&nbsp;·&nbsp;&nbsp;SCROLL TO ZOOM&nbsp;&nbsp;·&nbsp;&nbsp;CLICK A
-        STAR&nbsp;&nbsp;·&nbsp;&nbsp;1,284 SYSTEMS
+        {mode === 'explore'
+          ? 'DRAG TO ROTATE  ·  WASD / RIGHT-DRAG TO MOVE  ·  SCROLL TO ZOOM  ·  FREE EXPLORE'
+          : 'DRAG TO ROTATE  ·  SCROLL TO ZOOM  ·  CLICK A STAR  ·  1,284 SYSTEMS'}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto' }}>
