@@ -1,36 +1,70 @@
+import { lazy, Suspense, useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import { SampleSource } from './domain/GalaxySource'
-import { DEFAULT_SELECTION, SAMPLE_SYSTEMS } from './domain/sampleSystems'
+import { Overlay } from './overlay/Overlay'
+import { TopBar } from './ui/TopBar'
+import { BottomBar } from './ui/BottomBar'
+import { SystemInfoPanel } from './ui/SystemInfoPanel'
+import { ACCENT_HEX, useMapStore } from './store/mapStore'
 
-// Phase 0 placeholder — proves the domain layer wires up and compiles.
-// No 3D render yet; the scene arrives with the feature work.
-const source = new SampleSource()
+// Code-split the heavy 3D stack (three + drei + postprocessing) so the initial
+// chunk is just React + the DOM chrome; the scene loads as its own chunk.
+const GalaxyCanvas = lazy(() =>
+  import('./scene/GalaxyCanvas').then((m) => ({ default: m.GalaxyCanvas })),
+)
 
-export default function App() {
-  const systems = source.getSystems()
-  const dust = source.getDust()
-  const selected = SAMPLE_SYSTEMS[DEFAULT_SELECTION]
-
+function Splash() {
   return (
-    <main
+    <div
       style={{
-        height: '100%',
+        position: 'absolute',
+        inset: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
-        letterSpacing: '0.04em',
+        gap: 10,
+        fontFamily: "'IBM Plex Mono', monospace",
       }}
     >
-      <div style={{ color: '#ffb84d', letterSpacing: '0.4em', fontSize: 11 }}>MILKY WAY SURVEY</div>
-      <div style={{ fontSize: 22, letterSpacing: '0.24em', color: '#d4dceb' }}>CAEVELA · PHASE 0</div>
-      <div style={{ color: '#5d6b80', fontSize: 12 }}>
-        {systems.length} catalogued systems · {dust.length} dust stars (seed locked)
+      <div style={{ color: 'var(--accent)', letterSpacing: '0.42em', fontSize: 11, opacity: 0.85 }}>
+        MILKY WAY SURVEY
       </div>
-      <div style={{ color: '#8a98ab', fontSize: 12, marginTop: 8 }}>
-        default selection → {selected?.name} ({selected?.id})
-      </div>
-    </main>
+      <div style={{ color: '#5d6b80', letterSpacing: '0.24em', fontSize: 10 }}>INITIALIZING…</div>
+    </div>
+  )
+}
+
+export default function App() {
+  // The chrome consumes the GalaxySource interface, never SAMPLE_SYSTEMS directly.
+  const source = useMemo(() => new SampleSource(), [])
+  const systems = useMemo(() => source.getSystems(), [source])
+  const accent = useMapStore((s) => s.accent)
+
+  // Rebind Venator's --accent token to the survey accent (amber default). Every
+  // accent-driven bit of chrome + overlay follows from this one swap.
+  const accentVars = {
+    '--accent': ACCENT_HEX[accent],
+    '--accent-ink': '#000',
+  } as unknown as CSSProperties
+
+  const rootStyle: CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    fontFamily: "'Space Grotesk', sans-serif",
+    color: '#e8edf5',
+    ...accentVars,
+  }
+
+  return (
+    <div style={rootStyle}>
+      <Suspense fallback={<Splash />}>
+        <GalaxyCanvas source={source} />
+      </Suspense>
+      <Overlay systems={systems} />
+      <TopBar />
+      <BottomBar />
+      <SystemInfoPanel systems={systems} />
+    </div>
   )
 }
