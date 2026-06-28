@@ -12,6 +12,7 @@ import { GalaxyDisk } from './GalaxyDisk'
 import { Nebula } from './Nebula'
 import { DustField } from './DustField'
 import { SystemNodes } from './SystemNodes'
+import { SystemField } from './SystemField'
 import { SelectionFX } from './SelectionFX'
 import { SelectionController } from './SelectionController'
 import { CameraBridge } from './CameraBridge'
@@ -123,6 +124,7 @@ function KeyboardFly() {
 
 export function GalaxyCanvas({ source }: { source: GalaxySource }) {
   const systems = source.getSystems()
+  const field = source.getFieldSystems()
   const dust = source.getDust()
   const cameraPosition = orbitPosition(
     CAMERA_DEFAULTS.yaw,
@@ -144,6 +146,7 @@ export function GalaxyCanvas({ source }: { source: GalaxySource }) {
       <GalaxyDisk />
       <Nebula />
       <DustField dust={dust} />
+      <SystemField systems={field} />
       <SystemNodes systems={systems} />
       <SelectionFX systems={systems} />
       <SelectionController systems={systems} />
