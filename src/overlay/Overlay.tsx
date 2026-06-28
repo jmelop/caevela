@@ -52,7 +52,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * React re-render in the loop (only the tag's text reacts to selection/mode).
  */
 export function Overlay({ systems }: { systems: StarSystem[] }) {
-  const selectedIndex = useMapStore((s) => s.selectedIndex)
+  const selected = useMapStore((s) => s.selected)
   const mode = useMapStore((s) => s.mode)
 
   const labelRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -64,7 +64,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
   useEffect(() => {
     let raf = 0
     const tick = () => {
-      const { selectedIndex: sel, panelOpen, accent } = useMapStore.getState()
+      const { selected: sel, panelOpen, accent } = useMapStore.getState()
       const rgb = ACCENT_RGB[accent]
       const D = cameraDistance()
       const surveyFade = 1 - lodRef.t // survey overlay dims out at galaxy scale
@@ -76,7 +76,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         const el = labelRefs.current[i]
         if (!el) continue
         const p = project(systems[i].position)
-        if (!p || !p.inFront || p.depth <= 0.45 || (i === sel && panelOpen)) {
+        if (!p || !p.inFront || p.depth <= 0.45 || (systems[i].id === sel.id && panelOpen)) {
           el.style.display = 'none'
           continue
         }
@@ -100,7 +100,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
       }
 
       // Selected: reticle + tag + guide line.
-      const ps = project(systems[sel].position)
+      const ps = project(sel.position)
       const showSel = !!ps && panelOpen && ps.inFront && ps.depth > 0.45
       const reticle = reticleRef.current
       const tag = tagRef.current
@@ -188,7 +188,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
     return () => cancelAnimationFrame(raf)
   }, [systems])
 
-  const selName = systems[selectedIndex]?.name ?? ''
+  const selName = selected.name
   const selTag = mode === 'destination' ? 'TARGET LOCKED' : 'SELECTED'
 
   return (

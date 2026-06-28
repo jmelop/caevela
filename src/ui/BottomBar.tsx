@@ -1,7 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useMapStore } from '../store/mapStore'
+import { SAMPLE_SYSTEMS } from '../domain/sampleSystems'
+import { DEFAULT_FIELD_COUNT } from '../domain/proceduralSystems'
 
 const MONO = "'IBM Plex Mono', monospace"
+
+// Local cluster + dense procedural field, formatted for the HUD readout.
+const SYSTEM_COUNT = (SAMPLE_SYSTEMS.length + DEFAULT_FIELD_COUNT).toLocaleString('en-US')
 
 const wrap: CSSProperties = {
   position: 'absolute',
@@ -70,7 +75,7 @@ export function BottomBar() {
       >
         {mode === 'explore'
           ? 'DRAG TO ROTATE  ·  WASD / RIGHT-DRAG TO MOVE  ·  SCROLL TO ZOOM  ·  FREE EXPLORE'
-          : 'DRAG TO ROTATE  ·  SCROLL TO ZOOM  ·  CLICK A STAR  ·  1,284 SYSTEMS'}
+          : 'DRAG TO ROTATE  ·  SCROLL TO ZOOM  ·  CLICK A STAR  ·  ' + SYSTEM_COUNT + ' SYSTEMS'}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto' }}>

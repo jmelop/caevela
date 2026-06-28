@@ -14,6 +14,7 @@ import { DustField } from './DustField'
 import { SystemNodes } from './SystemNodes'
 import { SystemField } from './SystemField'
 import { SelectionFX } from './SelectionFX'
+import { HoverFX } from './HoverFX'
 import { SelectionController } from './SelectionController'
 import { CameraBridge } from './CameraBridge'
 import { GalaxyLOD } from './GalaxyLOD'
@@ -148,7 +149,8 @@ export function GalaxyCanvas({ source }: { source: GalaxySource }) {
       <DustField dust={dust} />
       <SystemField systems={field} />
       <SystemNodes systems={systems} />
-      <SelectionFX systems={systems} />
+      <SelectionFX />
+      <HoverFX />
       <SelectionController systems={systems} />
       <CameraBridge />
       <GalaxyLOD />

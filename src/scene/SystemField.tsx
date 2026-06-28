@@ -8,6 +8,7 @@ import {
   MeshBasicMaterial,
 } from 'three'
 import type { FieldSystem } from '../domain/proceduralSystems'
+import { fieldRef } from './fieldRef'
 
 // Distance attenuation (world units, view-space depth): full detail near, fading
 // to a floor far away so the dense field reads as "detail near, impostor far"
@@ -61,6 +62,7 @@ export function SystemField({ systems }: { systems: FieldSystem[] }) {
     const inst = new InstancedMesh(geometry, material, n)
     const m = new Matrix4()
     const c = new Color()
+    const positions = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) {
       const s = systems[i]
       m.makeScale(s.renderSize, s.renderSize, s.renderSize)
@@ -70,7 +72,13 @@ export function SystemField({ systems }: { systems: FieldSystem[] }) {
       // the other star layers feed straight into their shaders.
       c.setRGB(s.color[0] / 255, s.color[1] / 255, s.color[2] / 255)
       inst.setColorAt(i, c)
+      positions[i * 3] = s.position[0]
+      positions[i * 3 + 1] = s.position[1]
+      positions[i * 3 + 2] = s.position[2]
     }
+    // Publish a flat positions buffer for screen-space picking (Phase B).
+    fieldRef.positions = positions
+    fieldRef.systems = systems
     inst.instanceMatrix.needsUpdate = true
     if (inst.instanceColor) inst.instanceColor.needsUpdate = true
     inst.computeBoundingSphere() // object-level frustum culling
@@ -79,6 +87,8 @@ export function SystemField({ systems }: { systems: FieldSystem[] }) {
 
   useEffect(
     () => () => {
+      fieldRef.positions = null
+      fieldRef.systems = []
       mesh.geometry.dispose()
       ;(mesh.material as MeshBasicMaterial).dispose()
       mesh.dispose()

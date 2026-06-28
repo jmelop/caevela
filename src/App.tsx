@@ -64,7 +64,7 @@ export default function App() {
       <Overlay systems={systems} />
       <TopBar />
       <BottomBar />
-      <SystemInfoPanel systems={systems} />
+      <SystemInfoPanel />
     </div>
   )
 }

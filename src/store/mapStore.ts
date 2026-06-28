@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { NavMode } from '../domain/types'
-import { DEFAULT_SELECTION } from '../domain/sampleSystems'
+import type { NavMode, StarSystem } from '../domain/types'
+import { DEFAULT_SELECTION, SAMPLE_SYSTEMS } from '../domain/sampleSystems'
 
 export type AccentName = 'Amber' | 'Cyan'
 
@@ -17,11 +17,15 @@ export const ACCENT_RGB: Record<AccentName, string> = {
 }
 
 interface MapState {
-  selectedIndex: number
+  /** The selected system — a hand-authored local node OR a dense-field system. */
+  selected: StarSystem
+  /** The hovered system (field or local), for the in-scene hover highlight. */
+  hovered: StarSystem | null
   mode: NavMode
   panelOpen: boolean
   accent: AccentName
-  select: (index: number) => void
+  select: (system: StarSystem) => void
+  setHovered: (system: StarSystem | null) => void
   setMode: (mode: NavMode) => void
   closePanel: () => void
   reopenPanel: () => void
@@ -29,16 +33,19 @@ interface MapState {
 }
 
 /**
- * Selection / mode / panel / accent state. The camera deliberately lives OUTSIDE
- * this store (in OrbitControls + a mutable interaction ref) to avoid re-render
- * churn every frame.
+ * Selection / hover / mode / panel / accent state. Selection holds the system
+ * OBJECT (not an array index) so any of the tens of thousands of field systems
+ * is selectable the same way as the 11 local ones. The camera deliberately lives
+ * OUTSIDE this store (OrbitControls + mutable refs) to avoid per-frame churn.
  */
 export const useMapStore = create<MapState>((set) => ({
-  selectedIndex: DEFAULT_SELECTION,
+  selected: SAMPLE_SYSTEMS[DEFAULT_SELECTION],
+  hovered: null,
   mode: 'destination',
   panelOpen: true,
   accent: 'Amber',
-  select: (index) => set({ selectedIndex: index, panelOpen: true }),
+  select: (system) => set({ selected: system, panelOpen: true }),
+  setHovered: (hovered) => set({ hovered }),
   setMode: (mode) => set({ mode }),
   closePanel: () => set({ panelOpen: false }),
   reopenPanel: () => set({ panelOpen: true }),

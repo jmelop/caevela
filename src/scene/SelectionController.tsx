@@ -5,8 +5,10 @@ import type { StarSystem } from '../domain/types'
 import { useMapStore } from '../store/mapStore'
 import { CAMERA_DEFAULTS, orbitPosition } from './cameraRig'
 import { lodRef } from './lod'
+import { fieldRef } from './fieldRef'
 
-const HIT_RADIUS_PX = 24
+const HIT_RADIUS_PX = 24 // forgiving radius for the hand-authored local cluster
+const FIELD_HIT_PX = 11 // tighter for the dense field, so dense regions don't over-grab
 const DRAG_THRESHOLD_PX = 3
 const IDLE_MS = 3500
 const AUTO_ROTATE_SPEED = 0.9 // ≈ the prototype's 0.0016 rad/frame drift
@@ -19,10 +21,17 @@ type OrbitLike = {
 }
 
 /**
- * All pointer/keyboard interaction that the prototype hand-rolled, mapped onto
- * the r3f camera: 24px screen-space hit-test selection (forgiving, unlike a raw
- * mesh raycast), drag<3px counts as a click, hover cursor, idle auto-rotation
- * after 3.5s, and Space to recenter. OrbitControls owns the actual orbit/zoom.
+ * All pointer/keyboard interaction: 24px screen-space hit-test for the local
+ * cluster (forgiving, like the prototype), a tight allocation-free screen-space
+ * pass over the dense field so EVERY field system is selectable, drag<3px counts
+ * as a click, hover cursor + in-scene highlight, idle auto-rotation, Space to
+ * recenter. OrbitControls owns the actual orbit/zoom.
+ *
+ * Field picking is screen-space nearest (not a mesh raycast): a 0.02-unit star is
+ * near-impossible to hit with a pixel-exact ray, and a typed-array sweep over
+ * tens of thousands runs in well under a millisecond — and gives the same
+ * forgiving feel the 11 local nodes already have. Hover runs at most once per
+ * frame (driven from the render loop), never per pointer event.
  */
 export function SelectionController({ systems }: { systems: StarSystem[] }) {
   const camera = useThree((s) => s.camera)
@@ -32,23 +41,25 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
 
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const lastInteract = useRef(-Infinity)
+  // Canvas-relative pointer, updated on move; consumed once per frame for hover.
+  const pointer = useRef<{ x: number; y: number; over: boolean }>({ x: 0, y: 0, over: false })
+  const hoveredId = useRef<string | null>(null)
+  const cursor = useRef<string>('grab')
+  // Bound inside the effect; invoked once per frame from useFrame for hover.
+  const frameHover = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const el = gl.domElement
     const tmp = new Vector3()
 
-    // Nearest catalogued node within HIT_RADIUS_PX of the pointer, in front of
-    // the camera. Returns -1 if none qualifies.
-    const hitTest = (clientX: number, clientY: number): number => {
-      const rect = el.getBoundingClientRect()
-      const mx = clientX - rect.left
-      const my = clientY - rect.top
-      let best = -1
+    // Nearest local node within HIT_RADIUS_PX of (mx,my) [canvas-relative], in
+    // front of the camera. Cheap — only 11 of them.
+    const hitLocal = (mx: number, my: number): StarSystem | null => {
+      let best: StarSystem | null = null
       let bestDist = HIT_RADIUS_PX
       for (let i = 0; i < systems.length; i++) {
         const p = systems[i].position
         tmp.set(p[0], p[1], p[2])
-        // Skip nodes behind the camera (view-space z must be negative).
         if (tmp.clone().applyMatrix4(camera.matrixWorldInverse).z >= 0) continue
         tmp.project(camera)
         const px = (tmp.x * 0.5 + 0.5) * size.width
@@ -56,10 +67,57 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
         const dist = Math.hypot(px - mx, py - my)
         if (dist < bestDist) {
           bestDist = dist
-          best = i
+          best = systems[i]
         }
       }
       return best
+    }
+
+    // Nearest field instance within FIELD_HIT_PX. Allocation-free sweep over the
+    // flat positions buffer — manual mat4 transforms, squared-distance compares.
+    const hitField = (mx: number, my: number): StarSystem | null => {
+      const pos = fieldRef.positions
+      if (!pos) return null
+      const ve = camera.matrixWorldInverse.elements
+      const pe = camera.projectionMatrix.elements
+      const W = size.width
+      const H = size.height
+      const n = fieldRef.systems.length
+      let best = -1
+      let bestSq = FIELD_HIT_PX * FIELD_HIT_PX
+      for (let i = 0; i < n; i++) {
+        const x = pos[i * 3]
+        const y = pos[i * 3 + 1]
+        const z = pos[i * 3 + 2]
+        // View space (column-major). Skip anything not in front of the camera.
+        const vz = ve[2] * x + ve[6] * y + ve[10] * z + ve[14]
+        if (vz >= 0) continue
+        const vx = ve[0] * x + ve[4] * y + ve[8] * z + ve[12]
+        const vy = ve[1] * x + ve[5] * y + ve[9] * z + ve[13]
+        // Clip space.
+        const cw = pe[3] * vx + pe[7] * vy + pe[11] * vz + pe[15]
+        if (cw <= 0) continue
+        const cx = pe[0] * vx + pe[4] * vy + pe[8] * vz + pe[12]
+        const cy = pe[1] * vx + pe[5] * vy + pe[9] * vz + pe[13]
+        const sx = ((cx / cw) * 0.5 + 0.5) * W
+        const sy = (-(cy / cw) * 0.5 + 0.5) * H
+        const dx = sx - mx
+        const dy = sy - my
+        const d = dx * dx + dy * dy
+        if (d < bestSq) {
+          bestSq = d
+          best = i
+        }
+      }
+      return best >= 0 ? fieldRef.systems[best] : null
+    }
+
+    // Local cluster wins ties (it's the highlighted survey); else the field.
+    const pick = (mx: number, my: number): StarSystem | null => hitLocal(mx, my) ?? hitField(mx, my)
+
+    const toCanvas = (clientX: number, clientY: number) => {
+      const rect = el.getBoundingClientRect()
+      return { mx: clientX - rect.left, my: clientY - rect.top }
     }
 
     const recenter = () => {
@@ -88,19 +146,27 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
         const dy = e.clientY - drag.current.y
         if (Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD_PX) drag.current.moved = true
         lastInteract.current = performance.now()
+        pointer.current.over = false // suppress hover while dragging
       } else {
-        el.style.cursor = hitTest(e.clientX, e.clientY) >= 0 ? 'pointer' : 'grab'
+        const { mx, my } = toCanvas(e.clientX, e.clientY)
+        pointer.current.x = mx
+        pointer.current.y = my
+        pointer.current.over = e.target === el
       }
     }
 
     const onPointerUp = (e: PointerEvent) => {
       if (drag.current && !drag.current.moved) {
-        const i = hitTest(e.clientX, e.clientY)
-        if (i >= 0) useMapStore.getState().select(i)
+        const { mx, my } = toCanvas(e.clientX, e.clientY)
+        const sys = pick(mx, my)
+        if (sys) useMapStore.getState().select(sys)
       }
       drag.current = null
       lastInteract.current = performance.now()
-      el.style.cursor = hitTest(e.clientX, e.clientY) >= 0 ? 'pointer' : 'grab'
+    }
+
+    const onPointerLeave = () => {
+      pointer.current.over = false
     }
 
     const onWheel = () => {
@@ -118,25 +184,52 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
     el.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
+    el.addEventListener('pointerleave', onPointerLeave)
     el.addEventListener('wheel', onWheel, { passive: true })
     window.addEventListener('keydown', onKeyDown)
+
+    // Expose pick to the frame loop via a ref-bound closure.
+    frameHover.current = () => {
+      if (drag.current || !pointer.current.over) {
+        if (hoveredId.current !== null) {
+          hoveredId.current = null
+          useMapStore.getState().setHovered(null)
+        }
+        if (cursor.current !== 'grab') {
+          cursor.current = 'grab'
+          el.style.cursor = 'grab'
+        }
+        return
+      }
+      const sys = pick(pointer.current.x, pointer.current.y)
+      const id = sys ? sys.id : null
+      if (id !== hoveredId.current) {
+        hoveredId.current = id
+        useMapStore.getState().setHovered(sys)
+      }
+      const want = sys ? 'pointer' : 'grab'
+      if (cursor.current !== want) {
+        cursor.current = want
+        el.style.cursor = want
+      }
+    }
 
     return () => {
       el.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
+      el.removeEventListener('pointerleave', onPointerLeave)
       el.removeEventListener('wheel', onWheel)
       window.removeEventListener('keydown', onKeyDown)
+      frameHover.current = null
     }
   }, [gl, camera, size, controls, systems])
 
-  // Idle auto-rotation: drift the camera after 3.5s of no interaction. drei's
-  // OrbitControls calls update() each frame (damping on), so toggling the flag
-  // is enough.
+  // Hover detection + idle auto-rotation, both bounded to once per frame.
   useFrame(() => {
+    frameHover.current?.()
     if (!controls) return
-    const idle =
-      !drag.current && performance.now() - lastInteract.current > IDLE_MS
+    const idle = !drag.current && performance.now() - lastInteract.current > IDLE_MS
     controls.autoRotate = idle
     // Slow the drift right down at galaxy scale (a survey-rate spin is dizzying
     // when the whole galaxy is in frame).
