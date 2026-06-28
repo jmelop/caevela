@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* Deep-space backdrop (matches the prototype's #05070d shell). */
+  background: #05070d;
+  color: #e8edf5;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
