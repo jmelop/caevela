@@ -4,14 +4,16 @@ import { Vector3 } from 'three'
 import type { StarSystem } from '../domain/types'
 import { useMapStore } from '../store/mapStore'
 import { CAMERA_DEFAULTS, orbitPosition } from './cameraRig'
-import { lodRef } from './lod'
+import { lodRef, smooth } from './lod'
 import { fieldRef } from './fieldRef'
+import { flyRef } from './flyRef'
 
 const HIT_RADIUS_PX = 24 // forgiving radius for the hand-authored local cluster
 const FIELD_HIT_PX = 11 // tighter for the dense field, so dense regions don't over-grab
 const DRAG_THRESHOLD_PX = 3
 const IDLE_MS = 3500
 const AUTO_ROTATE_SPEED = 0.9 // ≈ the prototype's 0.0016 rad/frame drift
+const FLY_DURATION = 0.7 // seconds for the "inspect" fly-to-system animation
 
 type OrbitLike = {
   target: Vector3
@@ -47,6 +49,16 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
   const cursor = useRef<string>('grab')
   // Bound inside the effect; invoked once per frame from useFrame for hover.
   const frameHover = useRef<(() => void) | null>(null)
+  // Inspect fly-to animation state (start/end camera pos + orbit target).
+  const fly = useRef({
+    active: false,
+    t: 0,
+    handled: 0,
+    sp: new Vector3(),
+    st: new Vector3(),
+    ep: new Vector3(),
+    et: new Vector3(),
+  })
 
   useEffect(() => {
     const el = gl.domElement
@@ -137,6 +149,7 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
     const onPointerDown = (e: PointerEvent) => {
       drag.current = { x: e.clientX, y: e.clientY, moved: false }
       lastInteract.current = performance.now()
+      fly.current.active = false // a drag cancels any in-flight inspect fly
       el.style.cursor = 'grabbing'
     }
 
@@ -225,10 +238,41 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
     }
   }, [gl, camera, size, controls, systems])
 
-  // Hover detection + idle auto-rotation, both bounded to once per frame.
-  useFrame(() => {
+  // Inspect fly-to + hover detection + idle auto-rotation, all bounded to once
+  // per frame.
+  useFrame((_, delta) => {
     frameHover.current?.()
     if (!controls) return
+
+    // A new fly request starts an animation toward the system, ending in the
+    // same default framing Space uses — just centred on that system.
+    const f = fly.current
+    if (flyRef.request !== f.handled && flyRef.target) {
+      f.handled = flyRef.request
+      f.sp.copy(camera.position)
+      f.st.copy(controls.target)
+      f.et.set(flyRef.target[0], flyRef.target[1], flyRef.target[2])
+      const [ox, oy, oz] = orbitPosition(
+        CAMERA_DEFAULTS.yaw,
+        CAMERA_DEFAULTS.pitch,
+        CAMERA_DEFAULTS.distance,
+      )
+      f.ep.set(f.et.x + ox, f.et.y + oy, f.et.z + oz)
+      f.active = true
+      f.t = 0
+    }
+    if (f.active) {
+      f.t = Math.min(1, f.t + delta / FLY_DURATION)
+      const e = smooth(f.t)
+      camera.position.lerpVectors(f.sp, f.ep, e)
+      controls.target.lerpVectors(f.st, f.et, e)
+      controls.autoRotate = false
+      controls.update()
+      lastInteract.current = performance.now() // keep idle drift suppressed
+      if (f.t >= 1) f.active = false
+      return
+    }
+
     const idle = !drag.current && performance.now() - lastInteract.current > IDLE_MS
     controls.autoRotate = idle
     // Slow the drift right down at galaxy scale (a survey-rate spin is dizzying
