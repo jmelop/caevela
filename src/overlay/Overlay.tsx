@@ -199,12 +199,15 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
       const showSel = !!ps && panelOpen && ps.inFront && ps.depth > 0.45
       const reticle = reticleRef.current
       const tag = tagRef.current
+      // The selection marker (reticle + tag + guide line) stays visible at EVERY
+      // scale — unlike the survey labels, you should always see what's selected,
+      // including the core black hole out at galaxy scale. So it ignores surveyFade.
       if (reticle) {
         reticle.style.display = showSel ? 'block' : 'none'
         if (showSel && ps) {
           reticle.style.left = `${ps.x}px`
           reticle.style.top = `${ps.y}px`
-          reticle.style.opacity = surveyFade.toFixed(3)
+          reticle.style.opacity = '1'
         }
       }
       if (tag) {
@@ -212,7 +215,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
         if (showSel && ps) {
           tag.style.left = `${ps.x}px`
           tag.style.top = `${ps.y}px`
-          tag.style.opacity = surveyFade.toFixed(3)
+          tag.style.opacity = '1'
         }
       }
 
@@ -231,7 +234,7 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
           ctx.clearRect(0, 0, vw, vh)
           const panel = document.getElementById('sys-panel')
-          if (showSel && ps && panel && surveyFade > 0.02) {
+          if (showSel && ps && panel) {
             const r = panel.getBoundingClientRect()
             const ex = r.left
             const ey = r.top + 52
@@ -241,8 +244,8 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
             const sx = ps.x + (dx / len) * 46
             const sy = ps.y + (dy / len) * 46
             const grad = ctx.createLinearGradient(sx, sy, ex, ey)
-            grad.addColorStop(0, `rgba(${rgb},${0.12 * surveyFade})`)
-            grad.addColorStop(1, `rgba(${rgb},${0.55 * surveyFade})`)
+            grad.addColorStop(0, `rgba(${rgb},0.12)`)
+            grad.addColorStop(1, `rgba(${rgb},0.55)`)
             ctx.strokeStyle = grad
             ctx.lineWidth = 1
             ctx.beginPath()
@@ -251,11 +254,11 @@ export function Overlay({ systems }: { systems: StarSystem[] }) {
             ctx.stroke()
             ctx.beginPath()
             ctx.arc(ex, ey, 3, 0, Math.PI * 2)
-            ctx.fillStyle = `rgba(${rgb},${0.9 * surveyFade})`
+            ctx.fillStyle = `rgba(${rgb},0.9)`
             ctx.fill()
             ctx.beginPath()
             ctx.arc(ex, ey, 6, 0, Math.PI * 2)
-            ctx.strokeStyle = `rgba(${rgb},${0.35 * surveyFade})`
+            ctx.strokeStyle = `rgba(${rgb},0.35)`
             ctx.lineWidth = 1
             ctx.stroke()
           }
