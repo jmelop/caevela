@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useMapStore } from '../store/mapStore'
+import { flyRef } from '../scene/flyRef'
 import {
   CloseIcon,
   CrosshairIcon,
@@ -103,6 +104,13 @@ export function SystemInfoPanel() {
   const visited = sys.status === 'Visited'
   const st = statusStyle(visited)
   const actionLabel = mode === 'destination' ? 'SET DESTINATION' : 'INSPECT SYSTEM'
+
+  // Fly the camera to the selected system — same framing Space gives the survey,
+  // centred on this system. The Canvas-side controller animates from flyRef.
+  const flyToSystem = () => {
+    flyRef.target = [sys.position[0], sys.position[1], sys.position[2]]
+    flyRef.request += 1
+  }
 
   return (
     <div id="sys-panel" className="info-panel" style={container}>
@@ -234,6 +242,7 @@ export function SystemInfoPanel() {
         <button
           type="button"
           className="panel-action"
+          onClick={flyToSystem}
           style={{
             display: 'flex',
             alignItems: 'center',
