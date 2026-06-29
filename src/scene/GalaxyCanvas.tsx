@@ -9,6 +9,7 @@ import { Starfield } from './Starfield'
 import { GalaxyHaze } from './GalaxyHaze'
 import { GalaxyGas } from './GalaxyGas'
 import { GalaxyDisk } from './GalaxyDisk'
+import { BlackHole } from './BlackHole'
 import { Nebula } from './Nebula'
 import { DustField } from './DustField'
 import { SystemNodes } from './SystemNodes'
@@ -145,6 +146,7 @@ export function GalaxyCanvas({ source }: { source: GalaxySource }) {
       <GalaxyHaze />
       <GalaxyGas />
       <GalaxyDisk />
+      <BlackHole />
       <Nebula />
       <DustField dust={dust} />
       <SystemField systems={field} />
