@@ -176,13 +176,14 @@ export function generateGalaxyClouds(seed: number = GALAXY_SEED + 7): GalaxyClou
     })
   }
 
-  // Bright warm core (bloom turns this into the central flare).
+  // Warm core glow — kept dimmer/smaller so the central black hole reads against
+  // it instead of being washed out by the flare.
   for (let i = 0; i < 4; i++) {
     clouds.push({
       position: [g3() * 1.2, g3(), g3() * 1.2],
-      scale: R * (0.11 + rng() * 0.13),
+      scale: R * (0.08 + rng() * 0.1),
       color: [255, 226, 174],
-      opacity: 0.05 + rng() * 0.04,
+      opacity: 0.025 + rng() * 0.02,
     })
   }
 

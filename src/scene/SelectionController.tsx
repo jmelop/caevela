@@ -6,6 +6,7 @@ import { useMapStore } from '../store/mapStore'
 import { CAMERA_DEFAULTS, orbitPosition } from './cameraRig'
 import { lodRef } from './lod'
 import { fieldRef } from './fieldRef'
+import { DISK_OUTER, SGR_A_STAR } from '../domain/galacticCore'
 
 const HIT_RADIUS_PX = 24 // forgiving radius for the hand-authored local cluster
 const FIELD_HIT_PX = 11 // tighter for the dense field, so dense regions don't over-grab
@@ -112,8 +113,28 @@ export function SelectionController({ systems }: { systems: StarSystem[] }) {
       return best >= 0 ? fieldRef.systems[best] : null
     }
 
-    // Local cluster wins ties (it's the highlighted survey); else the field.
-    const pick = (mx: number, my: number): StarSystem | null => hitLocal(mx, my) ?? hitField(mx, my)
+    // The galactic-core black hole is a big target: hit-test against its apparent
+    // on-screen radius (the disk's screen size), and only while it's visible.
+    const hitBlackHole = (mx: number, my: number): StarSystem | null => {
+      if (lodRef.t <= 0.08) return null
+      const p = SGR_A_STAR.position
+      const center = new Vector3(p[0], p[1], p[2])
+      if (center.clone().applyMatrix4(camera.matrixWorldInverse).z >= 0) return null
+      const c = center.clone().project(camera)
+      const scx = (c.x * 0.5 + 0.5) * size.width
+      const scy = (-c.y * 0.5 + 0.5) * size.height
+      const right = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+      const edge = center.clone().addScaledVector(right, DISK_OUTER).project(camera)
+      const ex = (edge.x * 0.5 + 0.5) * size.width
+      const ey = (-edge.y * 0.5 + 0.5) * size.height
+      const radius = Math.max(Math.hypot(ex - scx, ey - scy), 14)
+      return Math.hypot(scx - mx, scy - my) <= radius ? SGR_A_STAR : null
+    }
+
+    // Local cluster wins ties (it's the highlighted survey), then the core black
+    // hole (a big central target), then the dense field.
+    const pick = (mx: number, my: number): StarSystem | null =>
+      hitLocal(mx, my) ?? hitBlackHole(mx, my) ?? hitField(mx, my)
 
     const toCanvas = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect()
